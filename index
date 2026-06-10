@@ -1,0 +1,552 @@
+import React, { useState, useEffect, useRef } from 'react';
+
+// 포켓몬 진화 단계 데이터 정의
+const POKEMON_EVOLUTION = {
+  water: [
+    { id: 'water', name: '꼬부기', stage: 1, typeName: '물', imageUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/7.png', icon: '💧', color: 'bg-blue-500', text: 'text-blue-500', beats: 'fire', dmg: 15 },
+    { id: 'water', name: '어니부기', stage: 2, typeName: '물/물', imageUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/8.png', icon: '💧💧', color: 'bg-blue-600', text: 'text-blue-600', beats: 'fire', dmg: 22 },
+    { id: 'water', name: '거북왕', stage: 3, typeName: '물/최종형', imageUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/9.png', icon: '👑💧', color: 'bg-blue-800', text: 'text-blue-800', beats: 'fire', dmg: 30 },
+    { id: 'water', name: '메가거북왕', stage: 4, typeName: '물/메가진화', imageUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10036.png', icon: '🌀💧', color: 'bg-cyan-800', text: 'text-cyan-700 font-extrabold', beats: 'fire', dmg: 40 }
+  ],
+  grass: [
+    { id: 'grass', name: '이상해씨', stage: 1, typeName: '풀', imageUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png', icon: '🌿', color: 'bg-green-500', text: 'text-green-500', beats: 'water', dmg: 15 },
+    { id: 'grass', name: '이상해풀', stage: 2, typeName: '풀/풀', imageUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/2.png', icon: '🌿🌿', color: 'bg-green-600', text: 'text-green-600', beats: 'water', dmg: 22 },
+    { id: 'grass', name: '이상해꽃', stage: 3, typeName: '풀/최종형', imageUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/3.png', icon: '👑🌿', color: 'bg-emerald-800', text: 'text-emerald-800', beats: 'water', dmg: 30 },
+    { id: 'grass', name: '메가이상해꽃', stage: 4, typeName: '풀/메가진화', imageUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10033.png', icon: '🌸🌿', color: 'bg-teal-700', text: 'text-teal-600 font-extrabold', beats: 'water', dmg: 40 }
+  ],
+  fire: [
+    { id: 'fire', name: '파이리', stage: 1, typeName: '불', imageUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/4.png', icon: '🔥', color: 'bg-red-500', text: 'text-red-500', beats: 'grass', dmg: 15 },
+    { id: 'fire', name: '리자드', stage: 2, typeName: '불/불', imageUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/5.png', icon: '🔥🔥', color: 'bg-red-600', text: 'text-red-600', beats: 'grass', dmg: 22 },
+    { id: 'fire', name: '리자몽', stage: 3, typeName: '불/최종형', imageUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/6.png', icon: '👑🔥', color: 'bg-red-800', text: 'text-red-800', beats: 'grass', dmg: 30 },
+    { id: 'fire', name: '메가리자몽X', stage: 4, typeName: '불/메가진화', imageUrl: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10034.png', icon: '⚡🔥', color: 'bg-slate-800', text: 'text-indigo-600 font-extrabold', beats: 'grass', dmg: 40 }
+  ]
+};
+
+// 체육관 관장(스테이지) 정의
+const STAGES = [
+  { level: 1, name: '회색체육관 웅이', bg: 'bg-amber-800', startWins: 0, desc: '바위처럼 단단한 방어력! 첫 도전을 시작합니다.' },
+  { level: 2, name: '블루시티 이슬이', bg: 'bg-sky-600', startWins: 3, desc: '물살처럼 매서운 공격! 더 강력하게 진화한 상대를 마주합니다.' },
+  { level: 3, name: '포켓몬리그 목호', bg: 'bg-indigo-900', startWins: 6, desc: '최종 챔피언 등장! 상대는 이미 최종 진화 및 메가진화를 갖췄습니다.' }
+];
+
+// 간단한 레트로 음원 합성기 (Web Audio API 활용)
+const playSound = (type) => {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    const now = ctx.currentTime;
+
+    if (type === 'click') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(600, now);
+      osc.frequency.exponentialRampToValueAtTime(150, now + 0.1);
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+      osc.start(now);
+      osc.stop(now + 0.1);
+    } else if (type === 'hit') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(180, now);
+      osc.frequency.linearRampToValueAtTime(60, now + 0.25);
+      gain.gain.setValueAtTime(0.3, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+      osc.start(now);
+      osc.stop(now + 0.25);
+    } else if (type === 'heal') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(300, now);
+      osc.frequency.exponentialRampToValueAtTime(900, now + 0.35);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.linearRampToValueAtTime(0.01, now + 0.35);
+      osc.start(now);
+      osc.stop(now + 0.35);
+    } else if (type === 'evolve') {
+      // 상승하는 아르페지오 느낌
+      [300, 450, 600, 900].forEach((freq, idx) => {
+        const subOsc = ctx.createOscillator();
+        const subGain = ctx.createGain();
+        subOsc.connect(subGain);
+        subGain.connect(ctx.destination);
+        subOsc.type = 'sine';
+        subOsc.frequency.setValueAtTime(freq, now + idx * 0.12);
+        subGain.gain.setValueAtTime(0.15, now + idx * 0.12);
+        subGain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.12 + 0.2);
+        subOsc.start(now + idx * 0.12);
+        subOsc.stop(now + idx * 0.12 + 0.2);
+      });
+    } else if (type === 'victory') {
+      // 승리 팡파레
+      const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+      notes.forEach((freq, idx) => {
+        const subOsc = ctx.createOscillator();
+        const subGain = ctx.createGain();
+        subOsc.connect(subGain);
+        subGain.connect(ctx.destination);
+        subOsc.type = 'square';
+        subOsc.frequency.setValueAtTime(freq, now + idx * 0.15);
+        subGain.gain.setValueAtTime(0.12, now + idx * 0.15);
+        subGain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.15 + 0.3);
+        subOsc.start(now + idx * 0.15);
+        subOsc.stop(now + idx * 0.15 + 0.3);
+      });
+    } else if (type === 'lose') {
+      // 패배 효과음
+      const notes = [392.00, 349.23, 311.13, 261.63]; // G4, F4, Eb4, C4
+      notes.forEach((freq, idx) => {
+        const subOsc = ctx.createOscillator();
+        const subGain = ctx.createGain();
+        subOsc.connect(subGain);
+        subGain.connect(ctx.destination);
+        subOsc.type = 'triangle';
+        subOsc.frequency.setValueAtTime(freq, now + idx * 0.2);
+        subGain.gain.setValueAtTime(0.2, now + idx * 0.2);
+        subGain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.2 + 0.4);
+        subOsc.start(now + idx * 0.2);
+        subOsc.stop(now + idx * 0.2 + 0.4);
+      });
+    }
+  } catch (error) {
+    console.log('Audio error:', error);
+  }
+};
+
+export default function App() {
+  const [currentStage, setCurrentStage] = useState(0); // 0: 웅이, 1: 이슬이, 2: 목호
+  
+  // 배틀 진행용 HP 및 스테이터스
+  const [playerHP, setPlayerHP] = useState(100);
+  const [computerHP, setComputerHP] = useState(100);
+  
+  const [playerWins, setPlayerWins] = useState(0);
+  const [computerWins, setComputerWins] = useState(STAGES[0].startWins);
+
+  const [playerChoice, setPlayerChoice] = useState(null);
+  const [computerChoice, setComputerChoice] = useState(null);
+  
+  const [battleState, setBattleState] = useState('READY'); // READY, ANIMATING, ROUND_END, GAME_OVER, STAGE_CLEAR
+  const [logs, setLogs] = useState(['야생의 트레이너가 승부를 걸어왔다!']);
+  
+  // 애니메이션 효과 제어용
+  const [hitTarget, setHitTarget] = useState(null); // 'player', 'computer', 'both'
+  const [floatingDamage, setFloatingDamage] = useState({ player: 0, computer: 0 });
+  const [evolutionModal, setEvolutionModal] = useState(null);
+
+  const logsEndRef = useRef(null);
+
+  // 로그 스크롤 맨 아래로 자동 이동
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [logs]);
+
+  // 현재 승리 수에 따른 진화 단계 인덱스 가져오기 (0: 기본, 1: 1차, 2: 최종, 3: 메가)
+  const getEvolutionIndex = (wins) => {
+    if (wins >= 10) return 3;
+    if (wins >= 5) return 2;
+    if (wins >= 3) return 1;
+    return 0;
+  };
+
+  const getPokemon = (typeId, wins) => {
+    const stageIndex = getEvolutionIndex(wins);
+    return POKEMON_EVOLUTION[typeId][stageIndex];
+  };
+
+  // 라운드 실행
+  const handleSelectType = (choiceId) => {
+    if (battleState === 'ANIMATING' || playerHP <= 0 || computerHP <= 0) return;
+
+    playSound('click');
+    setBattleState('ANIMATING');
+    setPlayerChoice(null);
+    setComputerChoice(null);
+    setHitTarget(null);
+    setFloatingDamage({ player: 0, computer: 0 });
+
+    const pPokemon = getPokemon(choiceId, playerWins);
+    
+    // 컴퓨터의 무작위 타입 선택
+    const typeKeys = ['water', 'grass', 'fire'];
+    const randomTypeId = typeKeys[Math.floor(Math.random() * typeKeys.length)];
+    const cPokemon = getPokemon(randomTypeId, computerWins);
+
+    addLog(`가라! ${pPokemon.name}!`);
+    
+    setTimeout(() => {
+      setPlayerChoice(pPokemon);
+      setComputerChoice(cPokemon);
+      addLog(`상대는 ${cPokemon.name}을(를) 내보냈다!`);
+
+      // 0.8초 후 결과 연출 및 데미지 계산
+      setTimeout(() => {
+        resolveCombat(pPokemon, cPokemon);
+      }, 800);
+    }, 600);
+  };
+
+  // 전투 결과 판정
+  const resolveCombat = (pPokemon, cPokemon) => {
+    let pDmg = 0;
+    let cDmg = 0;
+    let newPlayerWins = playerWins;
+    let newComputerWins = computerWins;
+
+    if (pPokemon.id === cPokemon.id) {
+      // 무승부: 서로 비등하여 가벼운 충돌 데미지
+      pDmg = Math.round(cPokemon.dmg * 0.4);
+      cDmg = Math.round(pPokemon.dmg * 0.4);
+      addLog('두 기술이 정면으로 충돌했다! 힘이 비등비등하다.');
+      setHitTarget('both');
+      playSound('hit');
+    } else if (pPokemon.beats === cPokemon.id) {
+      // 플레이어 승리
+      cDmg = Math.round(pPokemon.dmg * 1.5); // 상성 이득 데미지 증폭
+      newPlayerWins = playerWins + 1;
+      setPlayerWins(newPlayerWins);
+      addLog(`효과가 굉장했다! ${pPokemon.name}의 격렬한 공격!`);
+      setHitTarget('computer');
+      playSound('hit');
+    } else {
+      // 컴퓨터 승리
+      pDmg = Math.round(cPokemon.dmg * 1.5);
+      newComputerWins = computerWins + 1;
+      setComputerWins(newComputerWins);
+      addLog(`효과가 별로인 것 같다... ${cPokemon.name}의 강력한 역습!`);
+      setHitTarget('player');
+      playSound('hit');
+    }
+
+    // 체력 및 플로팅 데미지 업데이트
+    setFloatingDamage({ player: pDmg, computer: cDmg });
+    const nextPlayerHP = Math.max(0, playerHP - pDmg);
+    const nextComputerHP = Math.max(0, computerHP - cDmg);
+
+    setPlayerHP(nextPlayerHP);
+    setComputerHP(nextComputerHP);
+
+    // 진화 감지 (플레이어)
+    checkEvolution('플레이어', playerWins, newPlayerWins);
+    // 진화 감지 (컴퓨터)
+    checkEvolution(STAGES[currentStage].name, computerWins, newComputerWins);
+
+    // 게임 오버 혹은 스테이지 클리어 체크
+    setTimeout(() => {
+      if (nextPlayerHP <= 0) {
+        playSound('lose');
+        addLog('눈앞이 깜깜해졌다... 패배했습니다.');
+        setBattleState('GAME_OVER');
+      } else if (nextComputerHP <= 0) {
+        playSound('victory');
+        addLog(`${STAGES[currentStage].name}에게서 완전히 승리하였습니다!`);
+        if (currentStage < STAGES.length - 1) {
+          setBattleState('STAGE_CLEAR');
+        } else {
+          setBattleState('GAME_OVER'); // 올클리어 게임오버 상태
+          addLog('🎉 축하합니다! 포켓몬 배틀 챔피언에 등극하셨습니다!');
+        }
+      } else {
+        setBattleState('READY');
+      }
+    }, 1200);
+  };
+
+  // 진화 조건 체크 및 이벤트 알림
+  const checkEvolution = (target, oldWins, newWins) => {
+    const oldStage = getEvolutionIndex(oldWins);
+    const newStage = getEvolutionIndex(newWins);
+    
+    if (newStage > oldStage) {
+      setTimeout(() => {
+        playSound('evolve');
+        setEvolutionModal({ target, stage: newStage + 1 });
+        addLog(`✨ 격렬한 배틀의 흥분으로 ${target}의 포켓몬 군단이 진화했다!`);
+      }, 500);
+    }
+  };
+
+  const addLog = (message) => {
+    setLogs((prev) => [...prev, message]);
+  };
+
+  // 다음 스테이지로 진행
+  const nextStage = () => {
+    playSound('click');
+    const nextIdx = currentStage + 1;
+    setCurrentStage(nextIdx);
+    setPlayerHP(100);
+    setComputerHP(100);
+    setComputerWins(STAGES[nextIdx].startWins);
+    setPlayerChoice(null);
+    setComputerChoice(null);
+    setBattleState('READY');
+    setLogs([`새로운 전장: ${STAGES[nextIdx].name} 관장에 도전합니다!`, STAGES[nextIdx].desc]);
+  };
+
+  // 전체 게임 리셋
+  const resetGame = () => {
+    playSound('click');
+    setCurrentStage(0);
+    setPlayerHP(100);
+    setComputerHP(100);
+    setPlayerWins(0);
+    setComputerWins(STAGES[0].startWins);
+    setPlayerChoice(null);
+    setComputerChoice(null);
+    setBattleState('READY');
+    setLogs(['새로운 승부가 펼쳐진다! 가라, 타입 상성 배틀!']);
+  };
+
+  // 체력 바 색상 계산
+  const getHPColor = (hp) => {
+    if (hp > 50) return 'bg-emerald-500';
+    if (hp > 20) return 'bg-amber-500';
+    return 'bg-rose-600 animate-pulse';
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 font-sans text-slate-100 selection:bg-purple-500 selection:text-white">
+      
+      {/* 게임 전체 쉘 (닌텐도 스위치/게임보이 느낌의 컨셉 레이아웃) */}
+      <div className="max-w-md w-full bg-slate-900 border-4 border-slate-700 rounded-3xl shadow-2xl overflow-hidden relative flex flex-col">
+        
+        {/* 상단바 및 체육관 관장 정보 */}
+        <div className={`p-4 text-center ${STAGES[currentStage].bg} text-white relative shadow-inner`}>
+          <span className="absolute top-2 left-3 text-[9px] bg-black bg-opacity-35 px-1.5 py-0.5 rounded uppercase tracking-widest font-bold">
+            STAGE {currentStage + 1}
+          </span>
+          <h1 className="text-xl font-black tracking-wide text-shadow-md">
+            {STAGES[currentStage].name}
+          </h1>
+          <p className="text-[10px] text-slate-100 opacity-90 mt-1">
+            {STAGES[currentStage].desc}
+          </p>
+        </div>
+
+        {/* 1. 상단 스코어 및 뱃지 판넬 */}
+        <div className="grid grid-cols-2 bg-slate-800 border-b border-slate-700 p-3 text-xs">
+          <div className="flex flex-col items-start pl-2">
+            <span className="text-[10px] text-slate-400 font-bold">나의 총 전적</span>
+            <div className="flex items-center gap-1">
+              <span className="text-base font-black text-yellow-400">{playerWins}</span>
+              <span className="text-slate-300">승</span>
+            </div>
+          </div>
+          <div className="flex flex-col items-end pr-2 border-l border-slate-700">
+            <span className="text-[10px] text-slate-400 font-bold">상대 전적 레벨</span>
+            <div className="flex items-center gap-1">
+              <span className="text-base font-black text-red-400">{computerWins}</span>
+              <span className="text-slate-300">레벨</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 2. 메인 배틀 스크린 (체력 바 및 대결 이펙트) */}
+        <div className="p-4 bg-slate-950 h-72 flex flex-col justify-between relative border-b border-slate-800">
+          
+          {/* 컴퓨터 포켓몬 정보창 (상단 우측 배치) */}
+          <div className="w-11/12 bg-slate-900 border border-slate-800 p-2 rounded-lg self-end text-xs shadow-md">
+            <div className="flex justify-between font-bold">
+              <span>{computerChoice ? computerChoice.name : '상대 대기중'}</span>
+              <span className="text-[10px] text-slate-400">Lv.{Math.max(1, computerWins * 3)}</span>
+            </div>
+            <div className="w-full bg-slate-800 h-2.5 rounded-full mt-1.5 overflow-hidden flex">
+              <div 
+                className={`h-full transition-all duration-500 ${getHPColor(computerHP)}`} 
+                style={{ width: `${computerHP}%` }}
+              />
+            </div>
+            <div className="text-right text-[9px] font-bold text-slate-400 mt-0.5">
+              HP {computerHP}/100
+            </div>
+          </div>
+
+          {/* 중앙 가상 전장 필드 */}
+          <div className="flex justify-between items-center px-4 py-2 my-auto w-full relative">
+            
+            {/* 플레이어 포켓몬 도트 */}
+            <div className={`flex flex-col items-center transition-all duration-300 ${hitTarget === 'player' || hitTarget === 'both' ? 'animate-bounce' : ''}`}>
+              <div className="w-20 h-20 bg-slate-900 bg-opacity-40 rounded-full flex items-center justify-center border-2 border-indigo-500/20 shadow-lg relative">
+                {playerChoice ? (
+                  <img src={playerChoice.imageUrl} alt={playerChoice.name} className="w-20 h-20 object-contain drop-shadow-[0_4px_6px_rgba(255,255,255,0.15)] transform scale-110" />
+                ) : (
+                  <span className="text-slate-600 text-3xl font-black">?</span>
+                )}
+                {/* 데미지 오버레이 텍스트 */}
+                {floatingDamage.player > 0 && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-red-600 text-white font-extrabold text-sm px-1.5 py-0.5 rounded shadow-lg animate-bounce z-40">
+                    -{floatingDamage.player}
+                  </div>
+                )}
+              </div>
+              <span className="text-[10px] mt-1 bg-indigo-900 px-2 py-0.5 rounded-full font-bold">PLAYER</span>
+            </div>
+
+            <div className="text-xl font-black italic text-slate-700 animate-pulse">VS</div>
+
+            {/* 상대 포켓몬 도트 */}
+            <div className={`flex flex-col items-center transition-all duration-300 ${hitTarget === 'computer' || hitTarget === 'both' ? 'animate-bounce' : ''}`}>
+              <div className="w-20 h-20 bg-slate-900 bg-opacity-40 rounded-full flex items-center justify-center border-2 border-rose-500/20 shadow-lg relative">
+                {computerChoice ? (
+                  <img src={computerChoice.imageUrl} alt={computerChoice.name} className="w-20 h-20 object-contain drop-shadow-[0_4px_6px_rgba(255,255,255,0.15)] transform scale-110" />
+                ) : (
+                  <span className="text-slate-600 text-3xl font-black">?</span>
+                )}
+                {/* 데미지 오버레이 텍스트 */}
+                {floatingDamage.computer > 0 && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-red-600 text-white font-extrabold text-sm px-1.5 py-0.5 rounded shadow-lg animate-bounce z-40">
+                    -{floatingDamage.computer}
+                  </div>
+                )}
+              </div>
+              <span className="text-[10px] mt-1 bg-rose-950 px-2 py-0.5 rounded-full font-bold">ENEMY</span>
+            </div>
+            
+          </div>
+
+          {/* 플레이어 포켓몬 정보창 (하단 좌측 배치) */}
+          <div className="w-11/12 bg-slate-900 border border-slate-800 p-2 rounded-lg text-xs shadow-md">
+            <div className="flex justify-between font-bold">
+              <span>{playerChoice ? playerChoice.name : '대기중인 포켓몬'}</span>
+              <span className="text-[10px] text-slate-400">Lv.{Math.max(1, playerWins * 3)}</span>
+            </div>
+            <div className="w-full bg-slate-800 h-2.5 rounded-full mt-1.5 overflow-hidden flex">
+              <div 
+                className={`h-full transition-all duration-500 ${getHPColor(playerHP)}`} 
+                style={{ width: `${playerHP}%` }}
+              />
+            </div>
+            <div className="text-left text-[9px] font-bold text-slate-400 mt-0.5">
+              HP {playerHP}/100
+            </div>
+          </div>
+
+        </div>
+
+        {/* 3. 텍스트 로그창 (게임보이 클래식 프레임 스타일) */}
+        <div className="bg-slate-900 p-3 h-28 overflow-y-auto border-b border-slate-800 flex flex-col gap-1 select-none">
+          {logs.map((log, index) => (
+            <div key={index} className="text-xs leading-relaxed text-slate-300 border-l-2 border-indigo-500 pl-2">
+              ⚡ {log}
+            </div>
+          ))}
+          <div ref={logsEndRef} />
+        </div>
+
+        {/* 4. 액션 배틀 패드 (스킬 선택 단추) */}
+        <div className="p-5 bg-slate-800">
+          
+          {/* 배틀 중 액션 버튼 */}
+          {battleState !== 'GAME_OVER' && battleState !== 'STAGE_CLEAR' && (
+            <div>
+              <p className="text-center font-bold text-[11px] text-slate-400 uppercase tracking-widest mb-3">
+                타입 기술을 선택하여 가해라!
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                {['water', 'grass', 'fire'].map((typeId) => {
+                  const currentPoke = getPokemon(typeId, playerWins);
+                  const isMega = playerWins >= 10;
+                  return (
+                    <button
+                      key={typeId}
+                      onClick={() => handleSelectType(typeId)}
+                      disabled={battleState === 'ANIMATING'}
+                      className={`h-24 rounded-xl flex flex-col items-center justify-center text-white shadow-lg transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed border-b-4 border-black/40 ${currentPoke.color} ${isMega ? 'ring-2 ring-purple-400 ring-offset-2 ring-offset-slate-900 animate-pulse' : ''}`}
+                    >
+                      <img src={currentPoke.imageUrl} alt={currentPoke.name} className="w-10 h-10 object-contain drop-shadow-md transform scale-125" />
+                      <span className="text-xs font-black mt-1.5 truncate max-w-full px-1">{currentPoke.name}</span>
+                      <span className="text-[8px] opacity-80 font-bold">({currentPoke.typeName})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 스테이지 클리어 안내 패널 */}
+          {battleState === 'STAGE_CLEAR' && (
+            <div className="text-center p-3">
+              <h3 className="text-lg font-black text-yellow-400 mb-2">🏆 관장 돌파 완료!</h3>
+              <p className="text-xs text-slate-300 mb-4">훌륭합니다! 다음 구역으로 넘어가 더 강한 관장을 돌파하세요!</p>
+              <button
+                onClick={nextStage}
+                className="w-full py-3 bg-gradient-to-r from-emerald-500 to-green-600 text-white font-extrabold rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all text-sm"
+              >
+                다음 체육관 입장하기 (HP 완전회복)
+              </button>
+            </div>
+          )}
+
+          {/* 패배 혹은 최종 우승 시 패널 */}
+          {battleState === 'GAME_OVER' && (
+            <div className="text-center p-3">
+              <h3 className="text-lg font-black text-rose-500 mb-2">🏁 배틀 종료</h3>
+              <p className="text-xs text-slate-300 mb-4">
+                {playerHP <= 0 ? '포켓몬 센터로 이송되었습니다... 다시 준비하여 도전하세요!' : '축하합니다! 포켓몬 마스터 리그 우승자가 되셨습니다!'}
+              </p>
+              <button
+                onClick={resetGame}
+                className="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-extrabold rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all text-sm"
+              >
+                처음부터 다시 전설 시작하기
+              </button>
+            </div>
+          )}
+
+        </div>
+
+        {/* 최하단 기기 조작 엣지 */}
+        <div className="bg-slate-950 p-3 text-center text-[10px] text-slate-500 flex justify-between px-6 border-t border-slate-800">
+          <button onClick={resetGame} className="underline hover:text-slate-300">소프트 리셋</button>
+          <span>TYPE CHAMPION SIMULATOR v1.8</span>
+        </div>
+
+      </div>
+
+      {/* 진화 연출 모달 팝업 */}
+      {evolutionModal && (
+        <div className="absolute inset-0 bg-black bg-opacity-90 flex flex-col items-center justify-center p-6 z-50 text-center animate-fade-in">
+          <div className={`p-8 rounded-3xl border-4 max-w-xs w-full shadow-2xl transform scale-100 transition-all ${evolutionModal.stage === 4 ? 'bg-slate-900 border-purple-500 shadow-[0_0_25px_rgba(168,85,247,0.4)]' : 'bg-slate-850 border-yellow-400'}`}>
+            <div className="text-5xl mb-4 animate-bounce">
+              {evolutionModal.stage === 4 ? '✨🧬🌀' : '✨💫✨'}
+            </div>
+            
+            <h2 className={`text-2xl font-black mb-2 ${evolutionModal.stage === 4 ? 'text-purple-400 animate-pulse' : 'text-yellow-300'}`}>
+              {evolutionModal.stage === 4 ? '공명하는 키스톤!' : '어라...?!'}
+            </h2>
+            
+            <p className="text-slate-300 font-bold mb-4 text-xs leading-relaxed">
+              {evolutionModal.target === '플레이어' ? '당신' : '상대 관장'}의 포켓몬들에게서 뜨거운 불꽃과 물살, 자라나는 식물의 폭발적인 파동이 휘몰아칩니다!
+            </p>
+            
+            {/* 진화 도트 그래픽 회전 */}
+            <div className={`w-28 h-28 rounded-full mx-auto flex items-center justify-center mb-4 border-4 border-dashed animate-spin ${evolutionModal.stage === 4 ? 'bg-purple-500 bg-opacity-10 border-purple-400' : 'bg-yellow-400 bg-opacity-10 border-yellow-400'}`}>
+              <span className="text-4xl">🧬</span>
+            </div>
+
+            <p className="text-white text-sm font-black mb-6">
+              {evolutionModal.target}의 기술들이 업그레이드되어<br />
+              <span className={`text-lg font-black underline ${evolutionModal.stage === 4 ? 'text-purple-400' : 'text-yellow-300'}`}>
+                {evolutionModal.stage === 2 ? '1차 진화' : evolutionModal.stage === 3 ? '최종 진화' : '한계를 초월한 메가진화'}
+              </span>
+              에 도달했습니다!
+            </p>
+
+            <button
+              onClick={() => setEvolutionModal(null)}
+              className={`font-extrabold px-6 py-2.5 rounded-full w-full transition-colors shadow-md ${evolutionModal.stage === 4 ? 'bg-purple-500 hover:bg-purple-600 text-white' : 'bg-yellow-400 hover:bg-yellow-500 text-slate-900'}`}
+            >
+              배틀로 복귀
+            </button>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
